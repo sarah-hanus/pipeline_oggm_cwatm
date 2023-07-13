@@ -10,7 +10,7 @@ import time
 
 # # ------------------ POSTPROCESSING FOR WHOLE WORLD
 # ------------------- ENTER YOUR PATHS ---------------
-# enter path to git repository
+# enter path to data folder, this can be different than git folder, because data does not fit on github
 path_general = r'C:\Users\shanus\Processing\pipeline_oggm_cwatm'
 #resolution (5min or 30min)
 resolution = '30min'
