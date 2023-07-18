@@ -292,7 +292,7 @@ def change_format_oggm_output(glacier_run_results_list, variable):
     assert len(timeseries) == np.shape(all_months_all)[0]
     return all_months_all, timeseries
 
-@profile
+#@profile
 def change_format_oggm_output_world(oggm_results_list, startyear_df, endyear_df, variable):
     '''Function changes the format of oggm output from 2d array (days,years) to a 1d timeseries
     :param oggm_results_list: list of paths with oggm results'''
@@ -618,7 +618,7 @@ def oggm_output_to_cwatm_input(glacier_outlet, oggm_results_org, pf, startyear, 
         var_nc[i, :, :] = glacier_flux_on_2d
     ds.close()
 
-@profile
+#@profile
 def oggm_output_to_cwatm_input_world(glacier_outlet, oggm_results_path, pf_sim, startyear, endyear, outpath, out_name, example_netcdf, resolution, include_off_area = False):
     '''
     Function generates a netcdf of daily glacier melt using OGGM outputs. The outlet point of each glacier is fixed to the gridcell of the terminus as in RGI
@@ -680,6 +680,9 @@ def oggm_output_to_cwatm_input_world(glacier_outlet, oggm_results_path, pf_sim, 
     end_index = np.where(timeseries_glacier.year == endyear)[0][-1]
     timeseries = pd.date_range(timeseries_glacier[start_index].strftime('%Y-%m'), timeseries_glacier[end_index],freq='D')
     vars = ['melt', 'liq_prcp']
+    #define factor (pf) by which OGGM results are divided
+    #pf is 1 for melt because for snow accumulation and melt precipitation factor is used
+    # for liquid prcp we do not want to use pf of OGGM to make results more similar to CWatM, therefore results are divided by pf
     pfs = [1, pf_sim]
     for k, flux_on_glacier in enumerate([melt_on_glacier, rain_on_glacier]):
         var_name = vars[k]
@@ -715,7 +718,6 @@ def oggm_output_to_cwatm_input_world(glacier_outlet, oggm_results_path, pf_sim, 
 
         #now total melt input for timeseries
         #output is in kg/day -> transform to m3/day by dividing by 1000
-        #TODO: why is there a divison by pf??? this should only be thee case for liquid precipitation??
         glacier_flux_on = flux_on_glacier[start_index:end_index+1]
         if include_off_area:
             glacier_flux_off = [melt_off_glacier, rain_off_glacier][k][start_index:end_index + 1]
@@ -1028,7 +1030,7 @@ def oggm_area_to_cwatm_input(glacier_area_csv, oggm_results_org, cell_area, outp
 
         ds_fixed.close()
 
-@profile
+#@profile
 def oggm_area_to_cwatm_input_world(glacier_area_csv, oggm_results_path, cell_area, startyear, endyear, outpath, out_name, example_netcdf,
                              resolution, fraction=True, fixed_year=None, include_off_area=False):
     '''
@@ -1332,7 +1334,7 @@ def change_area(glacier_area_csv, oggm_results_list, mask_attributes, include_of
     dfinal.index = ind_cell
 
     return dfinal
-@profile
+#@profile
 def change_area_world(glacier_area_csv, oggm_results_list, mask_attributes, startyear, endyear, outpath, include_off_area=False, cell_area = None):
     '''
     Update glacier area in each gridcell by substracting the decreased area from all gridcells the glacier is covering, relative to the percentage coverage
@@ -1349,137 +1351,119 @@ def change_area_world(glacier_area_csv, oggm_results_list, mask_attributes, star
     #if not os.path.exists(outpath + 'df_area.csv'):
     for i, oggm_results_path in enumerate(oggm_results_list):
         print(oggm_results_path)
+        years = list(np.arange(startyear, endyear + 1))
+        #check if file already exists, if yea, then skip this step
+        if not os.path.isfile(
+            outpath + '_df_area_rgi{}.csv'.format(oggm_results_path.split('run_output_')[1].split('_1990')[0])):
 
-        oggm_results = xr.open_dataset(oggm_results_path)
-        #delete nan values
-        nok = oggm_results.volume.isel(time=0).isnull()
-        # check if OGGM results contains glaciers with missing results
-        if np.count_nonzero(nok) > 0: #len(oggm_results_org.rgi_id) != len(oggm_results.rgi_id):
-            oggm_results_new = oggm_results.dropna('rgi_id', thresh=10)
-            # get RGI IDs of missing values
-            rgi_ids_nan = list(set(list(oggm_results.rgi_id.values)) - set(list(oggm_results_new.rgi_id.values)))
-            # get number of glaciers with nan values
-            missing_rgis = len(oggm_results.rgi_id) - len(oggm_results_new.rgi_id)
-            # print warning that netcdf will not be generated for the glaciers with missing OGGM results
-            msg = 'Original OGGM results has {} glaciers with missing values ({}). These are not used for NetCDF generation'.format(
-                missing_rgis, rgi_ids_nan)
-            warnings.warn(msg)
+            oggm_results = xr.open_dataset(oggm_results_path)
+            #delete nan values
+            nok = oggm_results.volume.isel(time=0).isnull()
+            # check if OGGM results contains glaciers with missing results
+            if np.count_nonzero(nok) > 0: #len(oggm_results_org.rgi_id) != len(oggm_results.rgi_id):
+                oggm_results_new = oggm_results.dropna('rgi_id', thresh=10)
+                # get RGI IDs of missing values
+                rgi_ids_nan = list(set(list(oggm_results.rgi_id.values)) - set(list(oggm_results_new.rgi_id.values)))
+                # get number of glaciers with nan values
+                missing_rgis = len(oggm_results.rgi_id) - len(oggm_results_new.rgi_id)
+                # print warning that netcdf will not be generated for the glaciers with missing OGGM results
+                msg = 'Original OGGM results has {} glaciers with missing values ({}). These are not used for NetCDF generation'.format(
+                    missing_rgis, rgi_ids_nan)
+                warnings.warn(msg)
+                oggm_results.close()
+                del oggm_results
+                oggm_results = oggm_results_new
+                del oggm_results_new
+
+
+            years_oggm = list(oggm_results.time.values.astype('int')[:-1])
+            assert all(item in years_oggm for item in years), 'Years are out of range of years of OGGM results. Change startyear and endyear.'
+
+            #get IDs of glaciers modelled by OGGM
+            rgi_ids = oggm_results.rgi_id.values
+            #only look at glaciers which were modelled by OGGM
+            glacier_area_basin = glacier_area_csv[np.isin(glacier_area_csv.RGIId, rgi_ids)]
+            glacier_area_basin = glacier_area_basin.reset_index(drop=True)
+            #make a new array that contains latitudes longitudes, Gridcell Nr and years of data corresponding to length of OGGM results
+            # + 2 because we need lat, lon, Nr Gridcells but we do not need last year
+            array_area = np.zeros((np.shape(glacier_area_basin)[0], len(years) + 3))
+            array_area[:, 0] = glacier_area_basin.Nr_Gridcell.values
+            array_area[:,1] = glacier_area_basin.Latitude.values
+            array_area[:,2] = glacier_area_basin.Longitude.values
+
+            x = np.zeros((cellnr_lat, cellnr_lon))
+            x = x.astype(int)
+            #make a array in which data can be sroted
+            glacier_on_area_array = x
+            glacier_on_area_array = glacier_on_area_array.flatten()
+
+            # ----------- with map function -----------------------------
+
+            # current_glacier = list(map(lambda rgi_id: glacier_area_basin[glacier_area_basin.RGIId == rgi_id], rgi_ids))
+            # area_start = list(map(lambda rgi_id: np.sum(glacier_area_basin[glacier_area_basin.RGIId == rgi_id].Area), rgi_ids))
+            # if include_off_area:
+            #     area_oggm = list(map(lambda rgi_id: oggm_results.off_area.loc[:, rgi_id].values + oggm_results.on_area.loc[:, rgi_id].values, rgi_ids))
+            # else:
+            #     area_oggm = list(map(lambda rgi_id: oggm_results.on_area.loc[:, rgi_id].values, rgi_ids))
+
+            # ------------ with list comprehension
+
+            #get info about current glacier
+            current_glacier = [glacier_area_basin[glacier_area_basin.RGIId == rgi_id] for rgi_id in rgi_ids]
+            #get the area at RGI date
+            area_start = [np.sum(glacier_area_basin[glacier_area_basin.RGIId == rgi_id].Area) for rgi_id in rgi_ids]
+
+            #get glacier areas as modeled by OGGM (for x years)
+            if include_off_area:
+                area_oggm = [list(oggm_results.off_area.loc[years].values + oggm_results.on_area.loc[years].values) for rgi_id in rgi_ids]
+            else:
+                area_oggm = [oggm_results.on_area.loc[years, rgi_id].values for rgi_id in rgi_ids]
+
+            # -------------
+
+            #calculate area change (can be reduction or growth
+            area_change = list(map(lambda x, y: x-y, area_start, area_oggm))
+            rel_change = list(map(lambda x, y: y / x, area_start, area_change))
+            # calculate area of glacier using area change
+            area_glacier = list(map(lambda x, y: (np.outer((1 - x), y.Area)), rel_change, current_glacier)) #.flatten()
+
+            list(map(lambda x, y: np.testing.assert_allclose(np.sum(x, axis=1), y, rtol=1e-3, atol=0.1), area_glacier, area_oggm))
+            # everything below a an area of 1 should be neglected to avoid ridiculously small areas
+            area_glacier = list(map(lambda x: np.where(x < 1, 0, x), area_glacier))
+
+            #assert that coordinate values area correct
+            assert all(x.Latitude.values[0] == array_area[x.index.values[0], 1] for x in current_glacier)
+            assert all(x.Longitude.values[0] == array_area[x.index.values[0], 2] for x in current_glacier)
+
+            for k in range(len(area_glacier)):
+                array_area[current_glacier[k].index.values, 3:] = area_glacier[k][:, :].T
+
+            # delete current oggm result from workspace
             oggm_results.close()
             del oggm_results
-            oggm_results = oggm_results_new
-            del oggm_results_new
 
-
-        years_oggm = list(oggm_results.time.values.astype('int')[:-1])
-        years = list(np.arange(startyear, endyear + 1))
-        assert all(item in years_oggm for item in years), 'Years are out of range of years of OGGM results. Change startyear and endyear.'
-
-        #get IDs of glaciers modelled by OGGM
-        rgi_ids = oggm_results.rgi_id.values
-        #only look at glaciers which were modelled by OGGM
-        #TODO: should this be for all OGGM_results together?
-        glacier_area_basin = glacier_area_csv[np.isin(glacier_area_csv.RGIId, rgi_ids)]
-        glacier_area_basin = glacier_area_basin.reset_index(drop=True)
-        #make a new array that contains latitudes longitudes, Gridcell Nr and years of data corresponding to length of OGGM results
-        # + 2 because we need lat, lon, Nr Gridcells but we do not need last year
-        array_area = np.zeros((np.shape(glacier_area_basin)[0], len(years) + 3))
-        array_area[:, 0] = glacier_area_basin.Nr_Gridcell.values
-        array_area[:,1] = glacier_area_basin.Latitude.values
-        array_area[:,2] = glacier_area_basin.Longitude.values
-
-        x = np.zeros((cellnr_lat, cellnr_lon))
-        x = x.astype(int)
-        #make a array in which data can be sroted
-        glacier_on_area_array = x
-        glacier_on_area_array = glacier_on_area_array.flatten()
-
-        # ----------- with map function -----------------------------
-
-        # current_glacier = list(map(lambda rgi_id: glacier_area_basin[glacier_area_basin.RGIId == rgi_id], rgi_ids))
-        # area_start = list(map(lambda rgi_id: np.sum(glacier_area_basin[glacier_area_basin.RGIId == rgi_id].Area), rgi_ids))
-        # if include_off_area:
-        #     area_oggm = list(map(lambda rgi_id: oggm_results.off_area.loc[:, rgi_id].values + oggm_results.on_area.loc[:, rgi_id].values, rgi_ids))
-        # else:
-        #     area_oggm = list(map(lambda rgi_id: oggm_results.on_area.loc[:, rgi_id].values, rgi_ids))
-
-        # ------------ with list comprehension
-
-        #get info about current glacier
-        current_glacier = [glacier_area_basin[glacier_area_basin.RGIId == rgi_id] for rgi_id in rgi_ids]
-        #get the area at RGI date
-        area_start = [np.sum(glacier_area_basin[glacier_area_basin.RGIId == rgi_id].Area) for rgi_id in rgi_ids]
-
-        #get glacier areas as modeled by OGGM (for x years)
-        if include_off_area:
-            area_oggm = [list(oggm_results.off_area.loc[years].values + oggm_results.on_area.loc[years].values) for rgi_id in rgi_ids]
+            #generate a dataaframe
+            if i == 0:
+                df = pd.DataFrame(array_area,
+                                  columns=['Nr_Gridcell', 'Latitude', 'Longitude'] + list(years))
+                # save it just as backup
+                df.to_csv(
+                    outpath + '_df_area_rgi{}.csv'.format(oggm_results_path.split('run_output_')[1].split('_1990')[0]))
+            else:
+                df_new = pd.DataFrame(array_area,
+                                  columns=['Nr_Gridcell', 'Latitude', 'Longitude'] + list(years))
+                # save it just as backup
+                df_new.to_csv(
+                    outpath + '_df_area_rgi{}.csv'.format(oggm_results_path.split('run_output_')[1].split('_1990')[0]))
+                df = pd.concat([df, df_new])
         else:
-            area_oggm = [oggm_results.on_area.loc[years, rgi_id].values for rgi_id in rgi_ids]
-
-        # -------------
-
-        #calculate area change (can be reduction or growth
-        area_change = list(map(lambda x, y: x-y, area_start, area_oggm))
-        rel_change = list(map(lambda x, y: y / x, area_start, area_change))
-        # calculate area of glacier using area change
-        area_glacier = list(map(lambda x, y: (np.outer((1 - x), y.Area)), rel_change, current_glacier)) #.flatten()
-
-        list(map(lambda x, y: np.testing.assert_allclose(np.sum(x, axis=1), y, rtol=1e-3, atol=0.1), area_glacier, area_oggm))
-        # everything below a an area of 1 should be neglected to avoid ridiculously small areas
-        area_glacier = list(map(lambda x: np.where(x < 1, 0, x), area_glacier))
-
-        #assert that coordinate values area correct
-        assert all(x.Latitude.values[0] == array_area[x.index.values[0], 1] for x in current_glacier)
-        assert all(x.Longitude.values[0] == array_area[x.index.values[0], 2] for x in current_glacier)
-
-        for k in range(len(area_glacier)):
-            array_area[current_glacier[k].index.values, 3:] = area_glacier[k][:, :].T
+            if i == 0:
+                df = pd.read_csv(outpath + '_df_area_rgi{}.csv'.format(oggm_results_path.split('run_output_')[1].split('_1990')[0]), index_col=0)
+            else:
+                df_new = pd.read_csv(outpath + '_df_area_rgi{}.csv'.format(oggm_results_path.split('run_output_')[1].split('_1990')[0]), index_col=0)
+                df = pd.concat([df, df_new])
 
 
-        #loop through all glaciers to reduce area of each glacier in the gridcells that are covered by the glacier
-        # for rgi_id in rgi_ids:
-        #     #get all rows of df of current glacier
-        #     current_glacier = glacier_area_basin[glacier_area_basin.RGIId == rgi_id]
-        #     #area of RGI is start area, because for this area we have the outlines
-        #     area_start = np.sum(glacier_area_basin[glacier_area_basin.RGIId == rgi_id].Area)
-        #     #area of all years from OGGM results
-        #     if include_off_area:
-        #         area_oggm = oggm_results.off_area.loc[:, rgi_id].values + oggm_results.on_area.loc[:, rgi_id].values
-        #     else:
-        #         area_oggm = oggm_results.on_area.loc[:, rgi_id].values
-        #     #area reduction is relative to area at RGI date
-        #     #area reduction is negative if the glacier is growing
-        #     area_change = area_start - area_oggm
-        #     #get relative area reduction compared to glacier area at RGI date
-        #     #relative reduction is negative if glacier is growing
-        #     rel_change = area_change / area_start
-        #     #multiply the relative area that remains with the glacier area in the grid cell
-        #     area_glacier = np.outer((1 - rel_change), current_glacier.Area)
-        #     #area that remains should be the same as glacier area in oggm
-        #     #if area close to zero, relative differences can be large, therefore atol = 0.001
-        #
-        #     np.testing.assert_allclose(np.sum(area_glacier, axis=1), area_oggm, rtol=1e-3, atol = 0.1)# for past: rtol=1e-5, atol=0.001)
-        #     # everything below a an area of 1 should be neglected to avoid ridiculously small areas
-        #     area_glacier = np.where(area_glacier < 1, 0, area_glacier)
-        #
-        #     #put result in array to generate dataframe
-        #     # assert np.all(current_glacier.Latitude.values == array_area[current_glacier.index.values, 1])
-        #     # assert np.all(current_glacier.Longitude.values == array_area[current_glacier.index.values, 2])
-        #     array_area[current_glacier.index.values, 3:] = area_glacier[:-1, :].T
-
-        # delete current oggm result from workspace
-        oggm_results.close()
-        del oggm_results
-
-        #generate a dataaframe
-        # if i == 0:
-        df = pd.DataFrame(array_area,
-                          columns=['Nr_Gridcell', 'Latitude', 'Longitude'] + list(years))
-        # else:
-        #     df = pd.concat([df, pd.DataFrame(array_area,
-        #                       columns=['Nr_Gridcell', 'Latitude', 'Longitude'] + list(years))])
-
-        #save it just as backup
-        df.to_csv(outpath + '_df_area_rgi{}.csv'.format(oggm_results_path.split('run_output_')[1].split('_1990')[0]))
     # else:
     #     df = pd.read_csv(outpath + 'df_area.csv', index_col=0)
     #     years = list(df.columns[3:].astype('int'))#r'C:\Users\shanus\Data\Glaciers_new\results_oggm\world_30min\input_cwatm/all_regions_new_pf3.0_30mindf_area.csv', index_col=0)
