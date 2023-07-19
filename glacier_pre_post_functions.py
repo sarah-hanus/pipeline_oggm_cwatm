@@ -17,7 +17,18 @@ import datetime as dt
 #compare glaciers that are in area with glaciers_geodetic und benutze die schnittmenge
 
 #function that gives the areal extent of glaciers at the rgi date in each grid cell
-'''maybe this can be preprocessed for the whoel world and then the function just gets the values of the current glaciers'''
+
+def overlay_area_grid(file_path_glacier_shape, file_path_grid, path_save):
+    '''overlays the glacier geometries with the grid to get the glacier area per grid cell'''
+    rgi = gpd.read_file(file_path_glacier_shape)
+    grid = gpd.read_file(file_path_grid)
+    # results from overlay functions
+    overlay_result = gpd.overlay(rgi, grid, how='intersection')
+    # #get area of each part
+    #transform it to CRS in meter
+    overlay_54012 = overlay_result.to_crs('esri:54012')
+    overlay_54012["Area_Cell"] = overlay_54012.area
+    overlay_54012.to_file(path_save)
 
 def transform_to_df(glacier_center, glacier_terminus, overlay_result, resolution):
     '''
@@ -57,9 +68,12 @@ def transform_to_df(glacier_center, glacier_terminus, overlay_result, resolution
         try:
             # print(overlay_lat, glacier_center.get(overlay_result.RGIId[i])[0])
             # print("lon ", overlay_lon, glacier_center.get(overlay_result.RGIId[i])[1])
-            if overlay_lat == glacier_center.get(overlay_result.RGIId[i])[0] and overlay_lon == glacier_center.get(overlay_result.RGIId[i])[1]:
+            #if overlay_lat == glacier_center.get(overlay_result.RGIId[i])[0] and overlay_lon == glacier_center.get(overlay_result.RGIId[i])[1]:
+            #TODO, this might need to be changed for 1km version!!
+            if math.isclose(overlay_lat, glacier_center.get(overlay_result.RGIId[i])[0], abs_tol=1e-3) and math.isclose(overlay_lon, glacier_center.get(overlay_result.RGIId[i])[1], abs_tol=1e-3):
                 center[i] = 1
-            if overlay_lat == glacier_terminus.get(overlay_result.RGIId[i])[0] and overlay_lon == glacier_terminus.get(overlay_result.RGIId[i])[1]:
+            #if overlay_lat == glacier_terminus.get(overlay_result.RGIId[i])[0] and overlay_lon == glacier_terminus.get(overlay_result.RGIId[i])[1]:
+            if math.isclose(overlay_lat, glacier_terminus.get(overlay_result.RGIId[i])[0],abs_tol=1e-3) and math.isclose(overlay_lon, glacier_terminus.get(overlay_result.RGIId[i])[1], abs_tol=1e-3):
                 terminus[i] = 1
         except:
             print("An exception occurred for ", overlay_result.RGIId[i])
@@ -68,7 +82,7 @@ def transform_to_df(glacier_center, glacier_terminus, overlay_result, resolution
     df["center"] = center
     return df
 
-def df_glacier_grid_area(grid, rgi_regions, path_glacier_info, name_glacier_info, path_rgi_files, name_output, resolution):
+def df_glacier_grid_area(overlay_54012_filename, path_glacier_info, name_glacier_info, path_rgi_files, name_output, resolution):
     '''
     makes one csv file containing all glaciers of the world and the corresponding gridcells etc,
     uses transform_df function
@@ -84,28 +98,10 @@ def df_glacier_grid_area(grid, rgi_regions, path_glacier_info, name_glacier_info
     #path_glacier_info = "C:/Users/shanus/Data/Glaciers/glacier_id_dict/"
     glacier_center = pickle.load(open(path_glacier_info + name_glacier_info + "_key_id_center_{}.pkl".format(resolution), "rb"))
     glacier_terminus = pickle.load(open(path_glacier_info + name_glacier_info + "_key_id_terminus_{}.pkl".format(resolution), "rb"))
-    for i, current_rgi in enumerate(rgi_regions):
-        #print(current_rgi)
-        overlay_54012_filename = path_glacier_info + '/rgi_region_{}_{}.shp'.format(current_rgi,resolution)
-        if os.path.isfile(overlay_54012_filename):
-            overlay_54012 = gpd.read_file(overlay_54012_filename)
-        else:
-            rgi_file = glob.glob(path_rgi_files + current_rgi + '*/*.shp')[0]
-            rgi = gpd.read_file(rgi_file)
 
-            # results from overlay functions
-            overlay_result = gpd.overlay(rgi, grid, how='intersection')
-            # #get area of each part
-            overlay_54012 = overlay_result.to_crs('esri:54012')
-            overlay_54012["Area_Cell"] = overlay_54012.area
-            overlay_54012.to_file(
-                path_glacier_info + '/rgi_region_{}_{}.shp'.format(current_rgi,
-                                                                                                    resolution))
-        if i == 0:
-            df_all = transform_to_df(glacier_center, glacier_terminus, overlay_54012, resolution)
-        else:
-            df_all = pd.concat([df_all, transform_to_df(glacier_center, glacier_terminus, overlay_54012, "5min")])
-        df_all.to_csv(path_glacier_info+name_output+'_{}.csv'.format(resolution))
+    overlay_54012 = gpd.read_file(overlay_54012_filename)
+    df_all = transform_to_df(glacier_center, glacier_terminus, overlay_54012, resolution)
+    df_all.to_csv(path_glacier_info+name_output+'_{}.csv'.format(resolution))
 
 #generate pkl files of glacier id and coordinates of terminus/center of glaciers
 def make_glacier_outlet_dict(list_path_glacierstats, outpath, out_name_dict, resolution, rgi_ids=None):
@@ -293,7 +289,7 @@ def change_format_oggm_output(glacier_run_results_list, variable):
     return all_months_all, timeseries
 
 #@profile
-def change_format_oggm_output_world(oggm_results_list, startyear_df, endyear_df, variable):
+def change_format_oggm_output_world(oggm_results_list, startyear_df, endyear_df, variable, outpath):
     '''Function changes the format of oggm output from 2d array (days,years) to a 1d timeseries
     :param oggm_results_list: list of paths with oggm results'''
     # TODO can these lops be somehow represented in map functions instead??
@@ -360,20 +356,23 @@ def change_format_oggm_output_world(oggm_results_list, startyear_df, endyear_df,
             msg = 'Original OGGM results has some days with melt below 0, this is due to mass conservation scheme in OGGM. melt was clipped to minimum 0'
             warnings.warn(msg)
 
-        if idx == 0:
-            glacier_ids = list(oggm_results.rgi_id.values)
-        else:
-            glacier_ids += list(oggm_results.rgi_id.values)
+        glacier_ids_current = list(oggm_results.rgi_id.values)
         oggm_results.close()
         del oggm_results
 
         if idx == 0:
             all_months_melt_all = all_months_melt
             all_months_rain_all = all_months_rain
+            glacier_ids = glacier_ids_current
         else:
             # TODO all months next has to be concatenated
             all_months_melt_all = np.concatenate((all_months_melt_all,all_months_melt),axis=1)
             all_months_rain_all = np.concatenate((all_months_rain_all, all_months_rain), axis=1)
+            glacier_ids += glacier_ids_current
+
+        # save files
+        # pd.DataFrame(all_months_melt[~np.isnan(all_months_melt).any(axis=1), :], columns=glacier_ids_current, index=timeseries).to_csv(outpath + 'melt_on_rgi{}.csv'.format(oggm_results_path.split('run_output_')[1].split('_1990')[0]))
+        # pd.DataFrame(all_months_rain[~np.isnan(all_months_rain).any(axis=1), :], columns=glacier_ids_current, index=timeseries).to_csv(outpath + 'rain_on_rgi{}.csv'.format(oggm_results_path.split('run_output_')[1].split('_1990')[0]))
 
             #delete the nan values on the 29th of february
     all_months_melt_all = all_months_melt_all[~np.isnan(all_months_melt_all).any(axis=1), :]
@@ -671,9 +670,9 @@ def oggm_output_to_cwatm_input_world(glacier_outlet, oggm_results_path, pf_sim, 
 
 
     #change output of OGGM from 2darray (years, daysofyear, glaciers) to continous timeseries
-    melt_on_glacier, rain_on_glacier, glacier_ids, timeseries_glacier = change_format_oggm_output_world(oggm_results_path, startyear, endyear, '_on_glacier_daily')
+    melt_on_glacier, rain_on_glacier, glacier_ids, timeseries_glacier = change_format_oggm_output_world(oggm_results_path, startyear, endyear, '_on_glacier_daily', outpath) #14% of time for all rgis 30arcmin
     if include_off_area:
-        melt_off_glacier, rain_off_glacier, glacier_ids, _ = change_format_oggm_output_world(oggm_results_path, startyear, endyear, '_off_glacier_daily')
+        melt_off_glacier, rain_off_glacier, glacier_ids, _ = change_format_oggm_output_world(oggm_results_path, startyear, endyear, '_off_glacier_daily', outpath)
 
     #get start and end date corresponding to the inputs of the function
     start_index = np.where(timeseries_glacier.year == startyear)[0][0]
@@ -684,7 +683,8 @@ def oggm_output_to_cwatm_input_world(glacier_outlet, oggm_results_path, pf_sim, 
     #pf is 1 for melt because for snow accumulation and melt precipitation factor is used
     # for liquid prcp we do not want to use pf of OGGM to make results more similar to CWatM, therefore results are divided by pf
     pfs = [1, pf_sim]
-    for k, flux_on_glacier in enumerate([melt_on_glacier, rain_on_glacier]):
+    #for k, flux_on_glacier in enumerate([melt_on_glacier, rain_on_glacier]):
+    for k, flux_on_glacier in enumerate([melt_on_glacier]):
         var_name = vars[k]
         pf = pfs[k]
         #create netcdf file for each variable (maybe only do this for melt_on, liq_prcp_on because we do not need the others)
@@ -771,8 +771,8 @@ def oggm_output_to_cwatm_input_world(glacier_outlet, oggm_results_path, pf_sim, 
                     #assert np.sum(np.nonzero(np.isnan(glacier_melt[:, glacier_ids.index(id)]))) == 0
                     #if there are no nan values in timeseries
                     # if id o
-
-                    if id not in glacier_ids:
+                    #TODO this takes up >60% of time to run the whole function for 30arcmin all rgi regions: can this be improved
+                    if id not in glacier_ids: #17% of time for all rgis 30arcmin
                         #if glacier id of glacier that drains into the basin is not modelled in OGGM, raise ERROR
                         # THIS CAN BE TURNED OFF, IF YOU ONLY WANT TO MODEL SOME GLACIERS OR SO
                         #TODO make this better
@@ -781,9 +781,9 @@ def oggm_output_to_cwatm_input_world(glacier_outlet, oggm_results_path, pf_sim, 
                         warnings.warn(msg)
                         count_gl_not_oggm_results += 1
                         #if no nan values exist, then sum up the variables of all glaciers in the gridcell
-                    elif np.sum(np.nonzero(np.isnan(glacier_flux_on[:, glacier_ids.index(id)]))) == 0:
+                    elif np.sum(np.nonzero(np.isnan(glacier_flux_on[:, glacier_ids.index(id)]))) == 0: #24% of time for all rgis 30arcmin
                         # sum up timeseries of all glaciers in gridcell
-                        daily_flux_on += glacier_flux_on[:, glacier_ids.index(id)]
+                        daily_flux_on += glacier_flux_on[:, glacier_ids.index(id)] #23% of time for all rgis 30arcmin
                     else:
                         raise ValueError('Nan values encountered in timeseries of {} for variable {}'.format(id, glacier_flux_on))
 
@@ -820,8 +820,6 @@ def oggm_output_to_cwatm_input_world(glacier_outlet, oggm_results_path, pf_sim, 
             warnings.warn(
                 "{} glaciers were not found in OGGM results but are in a grid cell for which other glaciers were modelled in OGGM. Check carefully".format(count_gl_not_oggm_results))
         print("start putting results into netcdf")
-        #TODO this is what takes longest, so maybe try to work on this with map?
-
         # decide whether to loop through time or number of grid cells depending on length of timeseries vs number of glaciers
 
         # if df_flux_on.shape[1] < len(timeseries):
@@ -830,12 +828,18 @@ def oggm_output_to_cwatm_input_world(glacier_outlet, oggm_results_path, pf_sim, 
         #         var_nc[:, cell_lat_all_gridcells[i], cell_lon_all_gridcells[i]] = df_flux_on.iloc[:, i].values
         # else:
         for i in range(len(timeseries)):
+            print('start putting in netcdf')
+            # start_time = time.time()
             #array with all gridcells of the world, the index is used to add glacier melt to correct grid cell
             glacier_flux_on_array[glacier_gridcell_index] = df_flux_on.iloc[i, :].values
             # glacier_flux_on[glacier_ids] = np.ones(len(glacier_ids))
             glacier_flux_on_2d = np.reshape(glacier_flux_on_array, (cellnr_lat, cellnr_lon))
             #for each time step produce the 2d array of glacier flux
+            #TODO for single rgi regions a lot of time is spend on this> especially for 5arcmin this already take 60min for smallest rgi region (rgi region 6) improve it
+            # but initializing a 3d arra is a lot of memory
             var_nc[i, :, :] = glacier_flux_on_2d
+            # end_time = time.time()
+            # print("\ntime to put to netcdf function" + str(end_time - start_time))
         ds.close()
         del ds
 
@@ -1106,6 +1110,7 @@ def oggm_area_to_cwatm_input_world(glacier_area_csv, oggm_results_path, cell_are
         # check if cell_area and example_nc have the same cellwidth (same resolution)
         np.testing.assert_almost_equal(cellwidth, abs(cell_area.lon[1].values - cell_area.lon[0].values), decimal=4,
                                        err_msg='example_nc and cell_area need to have same resolution', verbose=True)
+        #TODO this takes 90% of computation time for all rgis at 30arcmin
         area_gl_gridcell = change_area_world(glacier_area_csv, oggm_results_path, mask_attributes, startyear, endyear, outpath + out_name,
                                        include_off_area=include_off_area, cell_area=cell_area)
     #TODO also for fraction = False cell area has to be given
@@ -1382,6 +1387,7 @@ def change_area_world(glacier_area_csv, oggm_results_list, mask_attributes, star
             #get IDs of glaciers modelled by OGGM
             rgi_ids = oggm_results.rgi_id.values
             #only look at glaciers which were modelled by OGGM
+            #TODO this take s35% of function time for 30arcmin
             glacier_area_basin = glacier_area_csv[np.isin(glacier_area_csv.RGIId, rgi_ids)]
             glacier_area_basin = glacier_area_basin.reset_index(drop=True)
             #make a new array that contains latitudes longitudes, Gridcell Nr and years of data corresponding to length of OGGM results
@@ -1407,9 +1413,15 @@ def change_area_world(glacier_area_csv, oggm_results_list, mask_attributes, star
             #     area_oggm = list(map(lambda rgi_id: oggm_results.on_area.loc[:, rgi_id].values, rgi_ids))
 
             # ------------ with list comprehension
+            #check that all glaciers that where modelled are also in csv, otherwise raise warning
+            if len(glacier_area_basin.RGIId.unique()) < len(rgi_ids):
+                warnings.warn('{} glaciers were modelled but information on these glaciers is missing in csv file. These glaciers are not used'.format(len(rgi_ids) - len(glacier_area_basin.RGIId.unique())))
+                rgi_ids = [x for x in rgi_ids if x in glacier_area_basin.RGIId.unique()]
 
+            #TODO these functions each take around 20% of run time, so in total 60%
             #get info about current glacier
             current_glacier = [glacier_area_basin[glacier_area_basin.RGIId == rgi_id] for rgi_id in rgi_ids]
+
             #get the area at RGI date
             area_start = [np.sum(glacier_area_basin[glacier_area_basin.RGIId == rgi_id].Area) for rgi_id in rgi_ids]
 
@@ -1421,12 +1433,15 @@ def change_area_world(glacier_area_csv, oggm_results_list, mask_attributes, star
 
             # -------------
 
-            #calculate area change (can be reduction or growth
+            #calculate area change (can be reduction or growth)
+            # use the area at RGI date as baseline
             area_change = list(map(lambda x, y: x-y, area_start, area_oggm))
+            #get the relative change in area
             rel_change = list(map(lambda x, y: y / x, area_start, area_change))
-            # calculate area of glacier using area change
+            # calculate area of glacier part in each grid cell using area of glacier in each grid cell and relative area change
             area_glacier = list(map(lambda x, y: (np.outer((1 - x), y.Area)), rel_change, current_glacier)) #.flatten()
 
+            #assert that the total area of glacier over all grid cell is the same as the area simulated in OGGM
             list(map(lambda x, y: np.testing.assert_allclose(np.sum(x, axis=1), y, rtol=1e-3, atol=0.1), area_glacier, area_oggm))
             # everything below a an area of 1 should be neglected to avoid ridiculously small areas
             area_glacier = list(map(lambda x: np.where(x < 1, 0, x), area_glacier))
