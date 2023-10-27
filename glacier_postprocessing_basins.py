@@ -31,9 +31,11 @@ path_output_results = 'C:/Users/shanus/Data/Glaciers_new/new_try/'
 if not os.path.exists(path_output_results):
     os.makedirs(path_output_results)
 
-#TODO provide example of example nc
-example_nc = "C:/Users/shanus/Data/Climate_Data/ISIMIP3a/Gloma/Tavg_daily.nc"
-#example_nc_30arcmin = [-180, 90, 720, 360, 1/2]
+# example netcdf file can either be the extent of the lat, lon domain you want to have in the netcdf file
+# e.g. [-180, 90, 720, 360, 1/2] for a global netcdf file at 30arcmin
+# or you can just give an example netcdf file that has the same extent as your modelling extent, e.g. previous output files from CWatM
+# this is done here as an example for the Gloma
+example_nc = path_general + '/Data/gloma_discharge_totalavg.nc'
 
 # open the csv files which contains information about which glacier covers which grid cells and which grid cells contain the center and terminus of glacier
 glacier_area_csv = pd.read_csv(path_preprocessed + 'glacier_area_df_{}.csv'.format(resolution))
@@ -59,7 +61,6 @@ if process_area:
                                                               path_output_results + '{}_area/'.format(resolution),"mask_{}_pf{}_{}".format(Catchment, str(pf), resolution),
                                                               example_nc, resolution, fraction=True,
                                                               fixed_year=None, include_off_area=False)
-
 # --------------- GENERATE GLACIER MELT INPUT FOR CWATM -----------------
 if process_runoff:
     #2) calculate melt of oggm results
