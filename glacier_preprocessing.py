@@ -27,7 +27,7 @@ rgi_regions = ['01','02', '03', '04', '05','06', '07','08', '09','10','11','12',
 
 # path to shapefiles of 5arcmin or 30arcmin grid
 if resolution == '5min':
-    # ATTENTION THIS FILE IS AVAILABLE VIA ZENODO but not on github repo because of its size
+    # ATTENTION THIS FILE IS AVAILABLE VIA ZENODO (https://doi.org/10.5281/zenodo.10046823) but not on github repo because of its size
     path_grid = path_general + "Data/grid_shp/grid_coordinates_5min_rgi_regions_ex19_4326.shp"
 elif resolution == '30min':
     path_grid = path_general + "Data/grid_shp/grid_coordinates_30min.shp"

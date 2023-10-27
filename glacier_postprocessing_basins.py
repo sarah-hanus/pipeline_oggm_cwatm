@@ -17,14 +17,12 @@ resolution = '5min'
 pf = 3.0
 CatchmentName = 'gloma_t_dw'
 Catchment = 'gloma'
-# give the rgi_region the basin is located in
-rgi_region = ['08']
-region = '08'
 
+# ATTENTION: enter path to data folder, this can be different than git folder, because data does not fit on github
 path_general = r'C:\Users\shanus\Processing\pipeline_oggm_cwatm/'
 path_preprocessed = path_general + '/glaciers_preprocessed/{}/'.format(resolution)
 
-# define output directory
+# ATTENTION: define output directory
 path_output_results = 'C:/Users/shanus/Data/Glaciers_new/new_try/'
 
 #make path for output directory if it does not exists
@@ -43,10 +41,10 @@ glacier_area_csv = pd.read_csv(path_preprocessed + 'glacier_area_df_{}.csv'.form
 # path to netcdf files of cell area
 path_cellarea = path_general + '/Data/cellarea/cellarea_{}.nc'.format(resolution)
 cellarea = xr.open_dataset(path_cellarea)
-# dictionary with infor about which glacier has terminus in which grid cell
+# dictionary with info about which glacier has terminus in which grid cell
 glacier_outlet = pkl.load(open(path_preprocessed +'/glaciers_key_coordinates_terminus_{}.pkl'.format(resolution), "rb"))
 
-#ATTENTION: an example OGGM output is given on github, more OGGM outputs can be accessed via Zenodo
+#ATTENTION: an example OGGM output is given on github, more OGGM outputs can be accessed via Zenodo (https://doi.org/10.5281/zenodo.10046823)
 path_oggm_results = path_general + '/Data/oggm_results/historical_run_output_{}_1990_2019_mb_real_daily_cte_pf_{}.nc'.format(CatchmentName, str(pf))
 oggm_results = xr.open_dataset(path_oggm_results)
 

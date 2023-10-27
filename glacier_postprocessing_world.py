@@ -12,11 +12,11 @@ from line_profiler import LineProfiler
 
 # # ------------------ POSTPROCESSING FOR WHOLE WORLD
 # ------------------- ENTER YOUR PATHS ---------------
-# enter path to data folder, this can be different than git folder, because data does not fit on github
+# ATTENTION: enter path to data folder, this can be different than git folder, because data does not fit on github
 path_general = r'C:\Users\shanus\Processing\pipeline_oggm_cwatm/'
 #resolution (5min or 30min)
 resolution = '30min'
-# put in output directory
+# ATTENTION: define output directory
 path_output_results = 'C:/Users/shanus/Data/Glaciers_new/new_try/'
 
 #make path for output directory if it does not exists
@@ -26,8 +26,8 @@ if not os.path.exists(path_output_results):
 #precipitation factor
 pf = '3.0'
 # path to OGGM results
-# ATTENTION: OGGM outputs for the whole globe can be accessed via zenodo
-path_oggm_results = r'D:\Results\OGGM\Global\past/fixed/'
+# ATTENTION: OGGM outputs for the whole globe can be accessed via zenodo ((https://doi.org/10.5281/zenodo.10046823))
+path_oggm_results = r''
 
 # list all paths of OGGM results that should be processed to CWatM input, e.g. paths of different RGI region results
 #TODO this looks different for a single basin
