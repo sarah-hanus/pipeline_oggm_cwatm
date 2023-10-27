@@ -23,3 +23,5 @@ The data is structured in thre directories
 - glacier_postprocessing_basins.py: script to process OGGM results of one basin to CWatM input files for this basin  (ATTENTION: paths must be adapted)
 
 **Don't hesitate to contact us in case of any questions (sarah.hanus@geo.uzh.ch)**
+
+Citation [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10048089.svg)](https://doi.org/10.5281/zenodo.10048089)
