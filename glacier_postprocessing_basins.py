@@ -31,34 +31,41 @@ path_output_results = 'C:/Users/shanus/Data/Glaciers_new/new_try/'
 if not os.path.exists(path_output_results):
     os.makedirs(path_output_results)
 
-#example_nc = "C:/Users/shanus/Data/Climate_Data/ISIMIP3a/Rhone/Tavg_daily.nc"
+#TODO provide example of example nc
+example_nc = "C:/Users/shanus/Data/Climate_Data/ISIMIP3a/Gloma/Tavg_daily.nc"
 #example_nc_30arcmin = [-180, 90, 720, 360, 1/2]
 
 # open the csv files which contains information about which glacier covers which grid cells and which grid cells contain the center and terminus of glacier
 glacier_area_csv = pd.read_csv(path_preprocessed + 'glacier_area_df_{}.csv'.format(resolution))
 
 # path to netcdf files of cell area
-path_cellarea = path_general + '/cellarea/cellarea_{}.nc'.format(resolution)
+path_cellarea = path_general + '/Data/cellarea/cellarea_{}.nc'.format(resolution)
 cellarea = xr.open_dataset(path_cellarea)
 # dictionary with infor about which glacier has terminus in which grid cell
 glacier_outlet = pkl.load(open(path_preprocessed +'/glaciers_key_coordinates_terminus_{}.pkl'.format(resolution), "rb"))
 
 #ATTENTION: an example OGGM output is given on github, more OGGM outputs can be accessed via Zenodo
-path_oggm_results = path_general + '/Data/oggm_results/'
-oggm_results = xr.open_dataset(path_oggm_results + '/historical_run_output_{}_1990_2019_mb_real_daily_cte_pf_{}.nc'.format(CatchmentName, CatchmentName, str(pf)))
+path_oggm_results = path_general + '/Data/oggm_results/historical_run_output_{}_1990_2019_mb_real_daily_cte_pf_{}.nc'.format(CatchmentName, str(pf))
+oggm_results = xr.open_dataset(path_oggm_results)
 
 # what to process
-process_runoff = False
+process_runoff = True
 process_area = False
 
 # ------------- GENERATE GLACIER AREA INPUT FOR CWATM -------------------
 if process_area:
     # 1) calculate area of oggm results
-    glacier_postprocessing_functions.oggm_area_to_cwatm_input(glacier_area_csv, oggm_results, cellarea, path_output_results, "{}_pf{}_{}".format(Catchment, str(pf), resolution), example_nc_30arcmin,resolution, fraction=True, fixed_year=None, include_off_area = False)
+    glacier_postprocessing_functions.oggm_area_to_cwatm_input(glacier_area_csv, [path_oggm_results], cellarea, 1990, 2019,
+                                                              path_output_results + '{}_area/'.format(resolution),"mask_{}_pf{}_{}".format(Catchment, str(pf), resolution),
+                                                              example_nc, resolution, fraction=True,
+                                                              fixed_year=None, include_off_area=False)
 
 # --------------- GENERATE GLACIER MELT INPUT FOR CWATM -----------------
 if process_runoff:
     #2) calculate melt of oggm results
-    glacier_postprocessing_functions.oggm_output_to_cwatm_input(glacier_outlet, [oggm_results_11, oggm_results_8], pf, 1990, 2019, path_output_results, "mask_{}_pf".format(region) + str(pf), example_nc_30arcmin, resolution, include_off_area = False, melt_or_prcp='prcp')
-    glacier_postprocessing_functions.oggm_output_to_cwatm_input(glacier_outlet, oggm_results, pf, 1990, 2019, path_output_results, "mask_{}_pf".format(region) + str(pf), example_nc_30arcmin, resolution, include_off_area = False, melt_or_prcp='melt')
+    glacier_postprocessing_functions.oggm_output_to_cwatm_input(glacier_outlet, [path_oggm_results], float(pf), 1990,
+                                                                2019, path_output_results,
+                                                                      "mask_{}_pf{}_{}".format(Catchment, str(pf), resolution),
+                                                                example_nc, resolution, include_off_area=False)
+
 
